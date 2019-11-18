@@ -77,9 +77,9 @@ WSGI_APPLICATION = 'eig_stats.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pydev_eigstatsbegin',
-        'USER': 'pydev_eigstatsuser',
-        'PASSWORD': 'Schooliscool41!!',
+        'NAME': *********,
+        'USER': *********,
+        'PASSWORD': *********,
         'HOST': 'localhost',
         'PORT': '5432',
     }
