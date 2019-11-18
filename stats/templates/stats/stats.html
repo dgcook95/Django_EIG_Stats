@@ -1,0 +1,55 @@
+{% load static %}
+<head>
+    <link rel='stylesheet' href="{% static 'bootstrap-4.3.1-dist/css/bootstrap.min.css' %}">
+</head>
+    {% if stats %}
+    <table class="table table-striped">
+        <thead class="thead-dark">
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Cases Worked</th>
+                <th scope="col">Cases P-Day</th>
+                <th scope="col">Avg OLT</th>
+                <th scope="col">Cases P-Hour</th>
+                <th scope="col">CSAT</th>
+                <th scope="col">Survey Count</th>
+                <th scope="col">STR</th>
+            </tr>
+        </thead>
+        {% for stat in stats.all %}
+        {% if stat.cases_worked != None %}
+        <tbody>
+            <tr>    
+                <td>{{ stat.name }}</td>
+                <td>{{ stat.cases_worked }}</td>
+                <td>{{ stat.cases_per_day }}</td>
+                <td>{{ stat.average_online_time }}</td>
+                <td>{{ stat.cases_per_hour }}</td>
+                <td>{{ stat.csat }}</td>
+                <td>{{ stat.surveys_taken }}</td>
+                <td>{{ stat.survey_take_rate }}%</td>
+            </tr>
+        </tbody>
+        {% endif %}
+        {% endfor %}
+        {% for man in man_stats.all %}
+        <tbody>
+            <tr class="font-weight-bold">
+                <td>{{ man.manager }}: Grand Total</td>
+                <td>{{ man.cases_worked }}</td>
+                <td>{{ man.cases_per_day }}</td>
+                <td>{{ man.average_online_time }}</td>
+                <td>{{ man.cases_per_hour }}</td>
+                <td>{{ man.csat }}</td>
+                <td>{{ man.surveys_taken }}</td>
+                <td>{{ man.survey_take_rate }}%</td>
+            </tr>
+        </tbody>
+        {% endfor %}
+    </table>
+    {% endif %}
+    <form action="{% url 'stats' %}" method="post" placeholder="Select Manager">
+        {% csrf_token %}
+        {{ form }}
+        <input type="submit" value="Fetch Stats" name="getstats">
+    </form>

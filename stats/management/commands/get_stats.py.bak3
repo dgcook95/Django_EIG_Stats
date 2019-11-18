@@ -1,0 +1,154 @@
+from django.core.management.base import BaseCommand, CommandError
+from stats.models import AgentStats, AgentManager
+import csv
+import os
+import collections
+
+class Command(BaseCommand):
+    
+    def handle(self, *args, **options):
+        
+        help = "Loads data from casework.csv into our AgentStats model"
+        
+        caseworkcsv = 'static/casework.csv'
+        onlinecsv = 'static/online.csv'
+        csatcsv = 'static/csat.csv'
+        
+        agent_cases_worked_dict = collections.defaultdict(list)
+        agent_days_worked_dict = collections.defaultdict(list)
+        agent_online_dict = collections.defaultdict(list)
+        agent_csat_dict = collections.defaultdict(list)
+        agent_total_surveys_dict = collections.defaultdict(list)
+        agent_emails_sent_dict = collections.defaultdict(list)
+        
+        roster = {}
+
+        def getDaysWorked(agent):
+            return len(agent_days_worked_dict[agent])
+
+
+        def getCasesWorked(agent):
+            return len(agent_cases_worked_dict[agent])
+
+
+        def getCasesPerDay(manager, agent):
+            try: 
+                return round(roster[manager][agent]['Cases Worked'] / roster[manager][agent]['Days Worked'], 2)
+            except:
+                return None
+
+        
+        def getAvgOnline(manager, agent):
+            try:
+                return round(sum(agent_online_dict[agent]) / 3600 / roster[manager][agent]['Days Worked'], 2)
+            except:
+                return None
+
+
+        def getCasesPerHour(manager, agent):
+            try:
+                return round(roster[manager][agent]['Cases Worked'] / (roster[manager][agent]['Average Online Time'] * roster[manager][agent]['Days Worked']), 2)
+            except:
+                return None
+        
+
+        def getTotalSurveys(agent):
+            return len(agent_total_surveys_dict[agent])
+
+        
+        def getCSAT(agent):
+            return round(sum(agent_csat_dict[agent]) / len(agent_csat_dict[agent]), 2)
+
+
+        def getEmailsSent(agent):
+            return sum(agent_emails_sent_dict[agent])
+
+        
+        def getSTR(manager, agent):
+            try:
+                return str(round(roster[manager][agent]['Surveys Taken'] / roster[manager][agent]['Emails Sent'] * 100, 2)) + '%'
+            except:
+                return None
+
+
+        with open(caseworkcsv, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                # initializes dictionary and adds cases worked to final dict
+                if row['Manager'] not in roster:
+                    roster[row['Manager']] = {}
+                if row['Agent'] not in roster[row['Manager']]:
+                    roster[row['Manager']][row['Agent']] = {}
+                roster[row['Manager']][row['Agent']] = {}
+        
+                agent_cases_worked_dict[row['Agent']].append(row['Case Number'])
+                agent_emails_sent_dict[row['Agent']].append(int(row['Case Messages Sent Count']))
+            
+                if row['Timestamp'].split()[0] not in agent_days_worked_dict[row['Agent']]:
+                    agent_days_worked_dict[row['Agent']].append(row['Timestamp'].split()[0])
+
+        with open(onlinecsv, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if row['Service Presence Status: Developer Name'] == "Online" and row['Status Duration'] != '':
+                    agent_online_dict[row['User: Full Name']].append(int(row['Status Duration']))
+
+        with open(csatcsv, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                agent_total_surveys_dict[row['Agent: Full Name']].append(row['Case: Case Number'])
+                agent_csat_dict[row['Agent: Full Name']].append(int(row['K Rating']))
+                agent_csat_dict[row['Agent: Full Name']].append(int(row['C Rating']))
+
+        # Example Dict Format: roster['Dylan Cook']['Agent Name']['Stat'] = ${stat}
+        # Below code stores stats for individual agents
+
+        for manager, value in roster.items():
+            for agent, value2 in value.items():
+                roster[manager][agent]['Days Worked'] = getDaysWorked(agent)
+                roster[manager][agent]['Cases Worked'] = getCasesWorked(agent)
+                roster[manager][agent]['Average Online Time'] = getAvgOnline(manager, agent)
+                roster[manager][agent]['Cases Per Day'] = getCasesPerDay(manager, agent)
+                roster[manager][agent]['Cases Per Hour'] = getCasesPerHour(manager, agent)
+                roster[manager][agent]['CSAT'] = getCSAT(agent)
+                roster[manager][agent]['Surveys Taken'] = getTotalSurveys(agent)
+                roster[manager][agent]['Emails Sent'] = getEmailsSent(agent)
+                roster[manager][agent]['STR'] = getSTR(manager, agent)
+
+        changed_agent = 0
+        new_agent = 0
+        
+        for manager, agentdict in roster.items():
+            for agent, statsdict in agentdict.items():
+                if AgentStats.objects.filter(name=agent).exists():
+                    stat = AgentStats.objects.get(name=agent)
+                    stat.cases_worked = roster[manager][agent]['Cases Worked']
+                    stat.days_worked = roster[manager][agent]['Days Worked']
+                    stat.cases_per_day = roster[manager][agent]['Cases Per Day']
+                    stat.average_online_time = roster[manager][agent]['Average Online Time']
+                    stat.cases_per_hour = roster[manager][agent]['Cases Per Hour']
+                    stat.csat = roster[manager][agent]['CSAT']
+                    stat.surveys_taken = roster[manager][agent]['Surveys Taken']
+                    stat.emails_sent = roster[manager][agent]['Emails Sent']
+                    stat.survey_take_rate = roster[manager][agent]['STR']
+                    stat.save()
+                    changed_agent += 1
+                else:
+                    stat = AgentStats()
+                    stat.name = agent
+                    stat.manager = manager
+                    stat.cases_worked = roster[manager][agent]['Cases Worked']
+                    stat.days_worked = roster[manager][agent]['Days Worked']
+                    stat.cases_per_day = roster[manager][agent]['Cases Per Day']
+                    stat.average_online_time = roster[manager][agent]['Average Online Time']
+                    stat.cases_per_hour = roster[manager][agent]['Cases Per Hour']
+                    stat.csat = roster[manager][agent]['CSAT']
+                    stat.surveys_taken = roster[manager][agent]['Surveys Taken']
+                    stat.emails_sent = roster[manager][agent]['Emails Sent']
+                    stat.survey_take_rate = roster[manager][agent]['STR']
+                    stat.save()
+                    new_agent += 1
+
+        print("{changed} objects had data re-loaded, {created} objects created with new data.".format(
+            changed=changed_agent, created=new_agent
+        ))
